@@ -1,0 +1,516 @@
+<!doctype html>
+<html lang="tr">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="theme-color" content="#020617">
+  <meta name="description" content="eFootball Türkiye topluluğu için kadro, taktik ve ilk 11 paylaşım ve oylama arenası.">
+  <title>EF Arena — eFootball Kadro Oylaması</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+  <script src="https://cdn.tailwindcss.com"></script>
+  <script src="https://www.gstatic.com/firebasejs/9.22.0/firebase-app-compat.js"></script>
+  <script src="https://www.gstatic.com/firebasejs/9.22.0/firebase-auth-compat.js"></script>
+  <script src="https://www.gstatic.com/firebasejs/9.22.0/firebase-firestore-compat.js"></script>
+  <style>
+    :root { color-scheme: dark; }
+    body { font-family: 'Plus Jakarta Sans', sans-serif; background: #020617; }
+    button, input, select { font: inherit; }
+    button:focus-visible, input:focus-visible, select:focus-visible { outline: 2px solid #fb923c; outline-offset: 2px; }
+    .modal-backdrop { background: rgb(2 6 23 / .84); backdrop-filter: blur(10px); }
+    .card-image { aspect-ratio: 16 / 10; }
+    .scroll-lock { overflow: hidden; }
+  </style>
+</head>
+<body class="min-h-screen text-slate-100 selection:bg-orange-500 selection:text-white">
+  <header class="sticky top-0 z-40 border-b border-slate-800/90 bg-slate-950/90 backdrop-blur-xl">
+    <div class="mx-auto flex min-h-16 max-w-6xl items-center justify-between gap-3 px-4 py-3">
+      <a href="#top" class="flex shrink-0 items-center gap-3" aria-label="EF Arena ana sayfa">
+        <span class="flex h-10 w-10 items-center justify-center rounded-xl bg-orange-500 text-xl font-extrabold text-slate-950 shadow-lg shadow-orange-500/20">EF</span>
+        <span><span class="block text-lg font-extrabold tracking-[.14em] text-orange-400">ARENA</span><span id="weekModeTitle" class="block text-[9px] font-bold uppercase tracking-[.14em] text-slate-500">Konsept: Kadro Puanlama</span></span>
+      </a>
+      <div class="flex items-center gap-2">
+        <button id="adminAccessBtn" type="button" title="SMS doğrulaması ücret doğurabileceğinden yönetici paneli ücretsiz modda kapalı" aria-label="Yönetici paneli hakkında bilgi" class="rounded-xl border border-slate-800 bg-slate-900 p-2.5 text-slate-500 transition hover:border-amber-500/50 hover:text-amber-400">🔒</button>
+        <div id="authSection" aria-live="polite" class="hidden sm:block"></div>
+        <button id="headerAddBtn" type="button" class="rounded-xl bg-orange-600 px-3 py-2.5 text-xs font-extrabold text-white shadow-lg shadow-orange-950/30 transition hover:bg-orange-500">+ Kadro Ekle</button>
+      </div>
+    </div>
+    <div id="mobileAuthSection" class="mx-auto max-w-6xl px-4 pb-3 sm:hidden" aria-live="polite"></div>
+  </header>
+
+  <main id="top" class="mx-auto w-full max-w-6xl flex-1 px-4 py-7 md:py-10">
+    <div id="setupNotice" role="status" class="mb-5 hidden rounded-2xl border border-amber-500/30 bg-amber-500/10 p-4 text-sm leading-6 text-amber-200"></div>
+    <section class="relative mb-8 overflow-hidden rounded-[2rem] border border-orange-500/20 bg-gradient-to-br from-orange-500/15 via-slate-900 to-slate-900 p-6 shadow-2xl shadow-black/20 md:flex md:items-center md:justify-between md:gap-8 md:p-9">
+      <div class="pointer-events-none absolute -right-12 -top-24 h-72 w-72 rounded-full bg-orange-500/10 blur-3xl"></div>
+      <div class="relative z-10 max-w-2xl">
+        <span class="inline-flex rounded-full border border-orange-400/25 bg-orange-500/10 px-3 py-1.5 text-[10px] font-extrabold uppercase tracking-[.17em] text-orange-300">eFootball Türkiye Ligi</span>
+        <h1 id="mainBannerTitle" class="mt-4 text-3xl font-extrabold leading-tight tracking-tight text-white md:text-4xl">En İyi Kadroyu Seç, Kral Ol!</h1>
+        <p id="mainBannerDesc" class="mt-3 max-w-xl text-sm leading-6 text-slate-400">Kendi kadronu paylaş, toplulukla oyla ve haftanın zirvesine ortak ol.</p>
+      </div>
+      <div class="relative z-10 mt-6 w-full rounded-2xl border border-slate-700/80 bg-slate-950/75 p-4 md:mt-0 md:w-64 md:shrink-0">
+        <label for="conceptSelector" class="mb-2 block text-[10px] font-extrabold uppercase tracking-[.13em] text-slate-400">Kategori / konsept</label>
+        <select id="conceptSelector" class="w-full cursor-pointer rounded-xl border border-slate-700 bg-slate-900 px-3 py-3 text-xs font-bold text-orange-300">
+          <option value="kadro">🔥 Kadro Puanlama</option>
+          <option value="dizilis">⚡ Haftanın En İyi Dizilişi</option>
+          <option value="ilk11">👑 En İyi İlk 11 Oylaması</option>
+        </select>
+      </div>
+    </section>
+
+    <section aria-labelledby="sectionTitle">
+      <div class="mb-5 flex flex-col gap-4 md:flex-row md:items-center md:justify-between">
+        <div class="flex flex-col gap-3 sm:flex-row sm:items-center sm:gap-5">
+          <h2 id="sectionTitle" class="text-xl font-extrabold tracking-tight text-slate-100">Güncel Kadrolar</h2>
+          <div class="inline-flex w-fit rounded-xl border border-slate-800 bg-slate-900 p-1" role="group" aria-label="Paylaşım sıralaması">
+            <button id="sortNew" type="button" aria-pressed="true" class="rounded-lg bg-orange-600 px-3 py-2 text-[11px] font-extrabold text-white">🆕 En Yeniler</button>
+            <button id="sortPop" type="button" aria-pressed="false" class="rounded-lg px-3 py-2 text-[11px] font-bold text-slate-400 transition hover:text-white">🔥 En Çok Oy</button>
+          </div>
+        </div>
+        <button id="vipOpenBtn" type="button" class="w-full rounded-xl bg-gradient-to-r from-amber-400 to-orange-500 px-4 py-3 text-xs font-extrabold text-slate-950 shadow-lg shadow-amber-900/20 transition hover:brightness-110 md:w-auto">👑 VIP &amp; Puan Satın Al</button>
+      </div>
+      <div id="connectionStatus" class="mb-4 text-xs text-slate-500" aria-live="polite">Firebase bağlantısı hazırlanıyor…</div>
+      <div id="grid-container" class="grid grid-cols-1 gap-5 md:grid-cols-2 lg:grid-cols-3" aria-live="polite"></div>
+    </section>
+  </main>
+
+  <footer class="mt-10 border-t border-slate-900 px-4 py-6 text-center text-[11px] text-slate-600">EF Arena · eFootball topluluğu için oyuncu paylaşım ve oylama alanı</footer>
+
+  <div id="nickModal" class="modal-backdrop fixed inset-0 z-50 hidden items-center justify-center overflow-y-auto p-4" role="dialog" aria-modal="true" aria-labelledby="nickTitle">
+    <section class="relative my-auto w-full max-w-md rounded-3xl border border-slate-800 bg-slate-900 p-6 shadow-2xl">
+      <button type="button" data-close="nickModal" aria-label="Pencereyi kapat" class="absolute right-4 top-4 rounded-lg bg-slate-800 px-2.5 py-1.5 text-sm text-slate-300 hover:text-white">✕</button>
+      <div class="mb-5 flex h-12 w-12 items-center justify-center rounded-2xl border border-orange-500/30 bg-orange-500/10 text-xs font-extrabold text-orange-300">NICK</div>
+      <h2 id="nickTitle" class="text-xl font-extrabold">Oyun içi Nick seç</h2>
+      <p class="mt-2 text-xs leading-5 text-slate-400">Ücretsiz misafir hesabınla paylaşım yapabilmek için benzersiz bir Nick belirle. Telefon doğrulaması yok.</p>
+      <form id="nickForm" class="mt-5 space-y-3">
+        <label class="block text-[10px] font-bold uppercase tracking-wider text-slate-400" for="loginNick">Benzersiz oyun içi Nick</label>
+        <input id="loginNick" type="text" autocomplete="nickname" maxlength="16" pattern="[A-Za-z0-9_]{3,16}" placeholder="Örn: VUKUAT_10" required class="w-full rounded-xl border border-slate-800 bg-slate-950 px-4 py-3 text-sm text-white placeholder:text-slate-600">
+        <p class="text-[11px] leading-5 text-slate-500">3–16 karakter; İngilizce harf, rakam ve alt çizgi kullan. Nick sonradan değiştirilemez.</p>
+        <button type="submit" class="w-full rounded-xl bg-orange-600 py-3 text-sm font-extrabold text-white transition hover:bg-orange-500">Nick&apos;i kaydet</button>
+      </form>
+      <p id="loginStatus" role="status" class="mt-4 min-h-5 text-xs text-amber-300"></p>
+    </section>
+  </div>
+
+  <div id="vipModal" class="modal-backdrop fixed inset-0 z-50 hidden items-center justify-center overflow-y-auto p-4" role="dialog" aria-modal="true" aria-labelledby="vipTitle">
+    <section class="relative my-auto w-full max-w-md rounded-3xl border border-slate-800 bg-slate-900 p-6 shadow-2xl">
+      <div class="mb-5 flex items-center justify-between gap-3"><h2 id="vipTitle" class="text-lg font-extrabold text-amber-300">👑 VIP &amp; Puan Paketleri</h2><button type="button" data-close="vipModal" aria-label="Pencereyi kapat" class="rounded-lg bg-slate-800 px-2.5 py-1.5 text-sm text-slate-300 hover:text-white">✕</button></div>
+      <div class="space-y-4 text-xs text-slate-300">
+        <div class="space-y-3 rounded-2xl border border-slate-800 bg-slate-950 p-4">
+          <p class="font-extrabold text-orange-300">Tek seferlik IBAN ödemesi</p>
+          <div class="flex items-center justify-between gap-3 rounded-xl border border-slate-800 bg-slate-900 p-3"><div><span class="block text-[9px] font-bold text-slate-500">ALICI ADI SOYADI</span><span class="mt-1 block font-mono font-bold text-white">UMUT USLU</span></div><button type="button" data-copy="UMUT USLU" class="shrink-0 rounded-lg bg-slate-800 px-3 py-2 text-[10px] font-extrabold text-amber-300 hover:bg-slate-700">Kopyala</button></div>
+          <div class="flex items-center justify-between gap-3 rounded-xl border border-amber-500/20 bg-slate-900 p-3"><div class="min-w-0"><span class="block text-[9px] font-bold text-slate-500">IBAN NUMARASI</span><span class="mt-1 block truncate font-mono text-[11px] font-bold text-amber-200">TR13 0006 2000 7480 0006 8976 18</span></div><button type="button" data-copy="TR130006200074800006897618" class="shrink-0 rounded-lg bg-amber-400 px-3 py-2 text-[10px] font-extrabold text-slate-950 hover:bg-amber-300">Kopyala</button></div>
+          <p class="text-[10px] leading-5 text-slate-400">Havale açıklamasına oyun içi <strong class="text-white">Nick&apos;ini</strong> yazmayı unutma.</p>
+        </div>
+        <div class="grid grid-cols-2 gap-3">
+          <article class="rounded-2xl border border-slate-800 bg-slate-950 p-4 text-center"><span class="text-[10px] font-extrabold uppercase text-slate-400">Standart Paket</span><p class="mt-2 text-lg font-extrabold text-white">50 TL</p><p class="mt-1 font-bold text-orange-300">+50 Oy Puanı</p></article>
+          <article class="relative overflow-hidden rounded-2xl border border-amber-500/40 bg-slate-950 p-4 text-center"><span class="absolute right-0 top-0 rounded-bl-lg bg-amber-400 px-2 py-1 text-[8px] font-extrabold text-slate-950">EN POPÜLER</span><span class="text-[10px] font-extrabold uppercase text-amber-300">👑 VIP Paket</span><p class="mt-2 text-lg font-extrabold text-white">100 TL</p><p class="mt-1 text-[10px] font-bold leading-4 text-amber-300">+100 Puan + Altın Rozet</p></article>
+        </div>
+        <p id="copyStatus" role="status" class="min-h-4 text-center text-emerald-400"></p>
+      </div>
+    </section>
+  </div>
+
+  <div id="uploadModal" class="modal-backdrop fixed inset-0 z-50 hidden items-center justify-center overflow-y-auto p-4" role="dialog" aria-modal="true" aria-labelledby="modalTitleText">
+    <section class="relative my-auto w-full max-w-md rounded-3xl border border-slate-800 bg-slate-900 p-6 shadow-2xl">
+      <div class="mb-5 flex items-start justify-between gap-3"><div><h2 id="modalTitleText" class="text-lg font-extrabold">Yeni Kadro Ekle</h2><span id="modalCategoryBadge" class="mt-2 inline-flex rounded-md bg-orange-500/10 px-2 py-1 text-[9px] font-extrabold uppercase text-orange-300">Kategori: Kadro Puanlama</span></div><button type="button" data-close="uploadModal" aria-label="Pencereyi kapat" class="rounded-lg bg-slate-800 px-2.5 py-1.5 text-sm text-slate-300 hover:text-white">✕</button></div>
+      <form id="uploadForm" class="space-y-4">
+        <div><label for="uploaderNick" class="mb-1.5 block text-[10px] font-bold uppercase text-slate-400">Oyun içi Nick</label><input id="uploaderNick" type="text" readonly class="w-full cursor-not-allowed rounded-xl border border-slate-800 bg-slate-950/70 px-3 py-3 text-xs font-bold text-orange-300"></div>
+        <div><label id="infoLabel" for="formInfo" class="mb-1.5 block text-[10px] font-bold uppercase text-slate-400">Diziliş &amp; taktik açıklaması</label><input id="formInfo" type="text" maxlength="100" required placeholder="Örn: 4-2-1-3 Quick Counter" class="w-full rounded-xl border border-slate-800 bg-slate-950 px-3 py-3 text-xs text-white placeholder:text-slate-600"></div>
+        <div><label for="imgFile" class="mb-1.5 block text-[10px] font-bold uppercase text-slate-400">Ekran görüntüsü</label><input id="imgFile" type="file" accept="image/jpeg,image/png,image/webp" required class="w-full rounded-xl border border-slate-800 bg-slate-950 px-3 py-2 text-xs text-slate-300 file:mr-3 file:rounded-lg file:border-0 file:bg-orange-600 file:px-3 file:py-2 file:text-[10px] file:font-bold file:text-white"><p class="mt-1.5 text-[10px] text-slate-500">JPEG olarak en fazla 800 px genişliğe küçültülür.</p></div>
+        <p id="uploadStatus" role="status" class="min-h-4 text-xs text-amber-300"></p>
+        <div class="flex gap-3"><button type="button" data-close="uploadModal" class="w-1/2 rounded-xl bg-slate-800 py-3 text-xs font-bold text-slate-300 hover:bg-slate-700">Vazgeç</button><button id="uploadSubmit" type="submit" class="w-1/2 rounded-xl bg-orange-600 py-3 text-xs font-extrabold text-white hover:bg-orange-500">Paylaş</button></div>
+      </form>
+    </section>
+  </div>
+
+  <div id="imageViewerModal" class="modal-backdrop fixed inset-0 z-[60] hidden flex-col items-center justify-center p-4" role="dialog" aria-modal="true" aria-labelledby="viewerCaption">
+    <div class="flex w-full max-w-5xl items-center justify-between gap-3 pb-3"><h2 id="viewerCaption" class="text-sm font-bold text-orange-300"></h2><button type="button" data-close="imageViewerModal" class="rounded-xl border border-slate-700 bg-slate-900 px-4 py-2 text-xs font-bold text-white">Kapat</button></div>
+    <img id="viewerImg" alt="Tam ekran kadro görüntüsü" class="max-h-[82vh] max-w-full rounded-2xl border border-slate-800 object-contain shadow-2xl">
+  </div>
+
+  <script>
+    'use strict';
+    const firebaseConfig = {
+      apiKey: 'AIzaSyDohnRdiqZ9LxyPNkuRLvrg16hBOKduUfs',
+      authDomain: 'efootball-2ba8c.firebaseapp.com',
+      projectId: 'efootball-2ba8c',
+      storageBucket: 'efootball-2ba8c.firebasestorage.app',
+      messagingSenderId: '25882451605',
+      appId: '1:25882451605:web:f5a1541174e4d9cc2c059c',
+      measurementId: 'G-6W753VRE35'
+    };
+    const MAX_IMAGE_BYTES = 600 * 1024;
+    const concepts = {
+      kadro: { title: 'En İyi Kadroyu Seç, Kral Ol!', description: 'Kendi kadronu paylaş, toplulukla oyla ve haftanın zirvesine ortak ol.', section: 'Güncel Kadrolar', short: 'Kadro Puanlama', modal: 'Yeni Kadro Ekle', badge: 'Kategori: Kadro Puanlama', button: '+ Kadro Ekle', placeholder: 'Örn: 4-2-1-3 Quick Counter' },
+      dizilis: { title: 'Haftanın En İyi Dizilişini Oyla!', description: 'Topluluğun bu haftaya özel kurduğu taktik ve dizilişleri keşfet.', section: 'Haftanın Dizilişleri', short: 'En İyi Diziliş', modal: 'Haftanın Dizilişini Ekle', badge: 'Kategori: Haftanın En İyi Dizilişi', button: '+ Diziliş Ekle', placeholder: 'Örn: 3-2-4-1 Top Çevirme Taktiği' },
+      ilk11: { title: 'Haftanın En İyi İlk 11’ini Seç!', description: 'İlk 11 adaylarını incele ve favori kadron için oy kullan.', section: 'En İyi İlk 11 Adayları', short: 'En İyi İlk 11', modal: 'İlk 11 Kadrosu Ekle', badge: 'Kategori: En İyi İlk 11 Oylaması', button: '+ İlk 11 Ekle', placeholder: 'Örn: Efsane İkonlar İlk 11' }
+    };
+    let app = null;
+    let auth = null;
+    let db = null;
+    let firebaseUser = null;
+    let wallet = null;
+    let walletCollection = null;
+    let currentConcept = 'kadro';
+    let currentSort = 'new';
+    let contents = [];
+    let contentUnsubscribe = null;
+    let walletUnsubscribe = null;
+    let nickUnsubscribe = null;
+    let authRun = 0;
+
+    const $ = (id) => document.getElementById(id);
+    const safeText = (value) => String(value ?? '').replace(/[&<>"']/g, (char) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[char]));
+    const normalizeNick = (value) => String(value || '').trim().toLowerCase();
+    const isGuestAccount = (user) => Boolean(user && user.isAnonymous);
+    const isConfigured = () => firebaseConfig.apiKey !== 'BURAYA_API_KEY_GELECEK' && firebaseConfig.projectId !== 'BURAYA_PROJECT_ID_GELECEK';
+    const getWalletRef = (uid) => db.collection(walletCollection).doc(uid);
+    const getMillis = (value) => value && typeof value.toMillis === 'function' ? value.toMillis() : 0;
+
+    function setConnection(message, isError = false) {
+      $('connectionStatus').textContent = message;
+      $('connectionStatus').className = `mb-4 text-xs ${isError ? 'text-rose-300' : 'text-slate-500'}`;
+    }
+    function showModal(id) {
+      const modal = $(id);
+      modal.classList.remove('hidden');
+      modal.classList.add('flex');
+      document.body.classList.add('scroll-lock');
+      const focusable = modal.querySelector('input:not([type=hidden]), button');
+      if (focusable) focusable.focus();
+    }
+    function closeModal(id) {
+      const modal = $(id);
+      modal.classList.add('hidden');
+      modal.classList.remove('flex');
+      if (![...document.querySelectorAll('[role="dialog"]')].some((el) => !el.classList.contains('hidden'))) document.body.classList.remove('scroll-lock');
+    }
+    function nickMessage(message, error = false) {
+      $('loginStatus').textContent = message;
+      $('loginStatus').className = `mt-4 min-h-5 text-xs ${error ? 'text-rose-300' : 'text-amber-300'}`;
+    }
+    function openNickModal() {
+      if (!isConfigured()) return nickMessage('Firebase yapılandırması gerekli.', true), showModal('nickModal');
+      if (!isGuestAccount(firebaseUser) || !wallet) return nickMessage('Misafir hesabı hazırlanıyor. Birkaç saniye sonra tekrar dene.', true), showModal('nickModal');
+      if (wallet.nick) return;
+      $('loginNick').value = '';
+      $('loginStatus').textContent = '';
+      showModal('nickModal');
+    }
+    async function createGuestProfile(event) {
+      event.preventDefault();
+      const user = auth.currentUser;
+      const nick = $('loginNick').value.trim();
+      if (!user || !isGuestAccount(user) || !wallet) return nickMessage('Misafir hesabı hazır değil. Sayfayı yenileyip tekrar dene.', true);
+      if (!/^[A-Za-z0-9_]{3,16}$/.test(nick)) return nickMessage('Nick 3–16 karakter olmalı; yalnızca İngilizce harf, rakam ve _ kullan.', true);
+      const nickKey = normalizeNick(nick);
+      const nickRef = db.collection('nicks').doc(nickKey);
+      const guestRef = db.collection('guests').doc(user.uid);
+      try {
+        nickMessage('Nick kaydediliyor…');
+        await db.runTransaction(async (transaction) => {
+          const [existingGuest, existingNick] = await Promise.all([transaction.get(guestRef), transaction.get(nickRef)]);
+          if (!existingGuest.exists) throw new Error('Misafir cüzdanı bulunamadı. Sayfayı yenileyip tekrar dene.');
+          if (existingGuest.data().nick) throw new Error('Nick daha önce belirlenmiş ve değiştirilemez.');
+          if (existingNick.exists) throw new Error('Bu Nick kullanılıyor. Başka bir Nick seç.');
+          const createdAt = firebase.firestore.FieldValue.serverTimestamp();
+          transaction.update(guestRef, { nick });
+          transaction.set(nickRef, { uid: user.uid, nick, createdAt });
+        });
+        closeModal('nickModal');
+        setConnection('Ücretsiz misafir hesabın hazır.');
+      } catch (error) {
+        nickMessage(firebaseError(error), true);
+      }
+    }
+    function firebaseError(error) {
+      if (error && error.message && !error.code) return error.message;
+      const messages = {
+        'auth/admin-restricted-operation': 'Firebase Console’da Anonymous girişini etkinleştir.',
+        'auth/operation-not-allowed': 'Firebase Console’da Anonymous girişini etkinleştir.',
+        'permission-denied': 'Firestore erişimi reddedildi. Firestore veritabanını etkinleştir ve firestore.rules dosyasını yayımla.',
+        'unavailable': 'Firebase bağlantısı geçici olarak kullanılamıyor.'
+      };
+      return messages[error && error.code] || (error && error.message) || 'İşlem tamamlanamadı.';
+    }
+    function renderAuth() {
+      const section = $('authSection');
+      const mobile = $('mobileAuthSection');
+      section.replaceChildren();
+      mobile.replaceChildren();
+      const make = (compact = false) => {
+        const wrap = document.createElement('div');
+        wrap.className = `flex items-center gap-2 rounded-xl border border-slate-800 bg-slate-900 px-3 py-2 ${compact ? 'justify-between' : ''}`;
+        const identity = document.createElement('span');
+        identity.className = 'max-w-32 truncate text-xs font-extrabold text-orange-300';
+        identity.textContent = wallet ? (wallet.nick || 'Nick seçilmedi') : 'Bağlanıyor…';
+        const balance = document.createElement('span');
+        balance.className = 'whitespace-nowrap rounded-lg bg-slate-800 px-2 py-1 text-[10px] font-extrabold text-amber-300';
+        balance.textContent = wallet ? `${wallet.points || 0} Puan` : '—';
+        wrap.append(identity, balance);
+        if (wallet && wallet.isVip) {
+          const vip = document.createElement('span'); vip.className = 'text-[10px] font-extrabold text-amber-300'; vip.textContent = '👑 VIP'; wrap.append(vip);
+        }
+        if (wallet && !wallet.nick) {
+          const action = document.createElement('button');
+          action.type = 'button';
+          action.className = 'whitespace-nowrap text-[10px] font-bold text-orange-300 hover:text-white';
+          action.textContent = 'Nick seç';
+          action.addEventListener('click', openNickModal);
+          wrap.append(action);
+        }
+        return wrap;
+      };
+      section.append(make());
+      mobile.append(make(true));
+    }
+    function onAuthChanged(user) {
+      authRun += 1;
+      const thisRun = authRun;
+      if (contentUnsubscribe) contentUnsubscribe();
+      if (walletUnsubscribe) walletUnsubscribe();
+      if (nickUnsubscribe) nickUnsubscribe();
+      contentUnsubscribe = null;
+      walletUnsubscribe = null;
+      nickUnsubscribe = null;
+      firebaseUser = user;
+      wallet = null;
+      walletCollection = 'guests';
+      renderAuth();
+      if (!user) {
+        auth.signInAnonymously().catch((error) => setConnection(`Misafir oturumu açılamadı: ${firebaseError(error)}`, true));
+        return;
+      }
+      if (!isGuestAccount(user)) {
+        auth.signOut().catch((error) => setConnection(firebaseError(error), true));
+        return;
+      }
+      const guestRef = db.collection('guests').doc(user.uid);
+      db.runTransaction(async (transaction) => {
+        const snap = await transaction.get(guestRef);
+        if (!snap.exists) transaction.set(guestRef, { uid: user.uid, points: 10, createdAt: firebase.firestore.FieldValue.serverTimestamp(), lastVoteContentId: '', lastVoteAmount: 0, lastVoteAt: firebase.firestore.FieldValue.serverTimestamp() });
+      }).then(() => {
+        if (thisRun === authRun) watchWallet(guestRef, 'guests', thisRun);
+      }).catch((error) => setConnection(firebaseError(error), true));
+    }
+    function watchWallet(ref, collection, run) {
+      walletCollection = collection;
+      walletUnsubscribe = ref.onSnapshot((snapshot) => {
+        if (run !== authRun) return;
+        if (!snapshot.exists) return;
+        wallet = snapshot.data();
+        if (wallet.nick && !nickUnsubscribe && firebaseUser) watchNick(firebaseUser.uid, wallet.nick, run);
+        renderAuth();
+        renderCards();
+      }, (error) => setConnection(firebaseError(error), true));
+    }
+    function watchNick(uid, nick, run) {
+      if (!nick) return;
+      nickUnsubscribe = db.collection('nicks').doc(normalizeNick(nick)).onSnapshot((snapshot) => {
+        if (run !== authRun) return;
+        if (!snapshot.exists || snapshot.data().uid !== uid) setConnection('Nick hesabı doğrulanamadı.', true);
+      }, (error) => setConnection(firebaseError(error), true));
+    }
+    function startFirebase() {
+      if (!isConfigured()) {
+        $('setupNotice').classList.remove('hidden');
+        $('setupNotice').textContent = 'Ücretsiz Firebase kurulumu: Spark planında kal, Authentication bölümünde yalnızca Anonymous girişini aç, Firestore Database oluştur ve firestore.rules dosyasını yayımla. SMS/Phone girişi ve faturalandırma gerektiren servisler kullanılmıyor.';
+        setConnection('Firebase yapılandırması bekleniyor.', true);
+        renderCards();
+        return;
+      }
+      try {
+        app = firebase.apps.length ? firebase.app() : firebase.initializeApp(firebaseConfig);
+        auth = firebase.auth();
+        db = firebase.firestore();
+        db.collection('contents').orderBy('createdAt', 'desc').onSnapshot((snapshot) => {
+          contents = snapshot.docs.map((doc) => ({ id: doc.id, ...doc.data() }));
+          setConnection('Canlı bulut senkronizasyonu etkin.');
+          renderCards();
+        }, (error) => setConnection(`Paylaşımlar yüklenemedi: ${firebaseError(error)}`, true));
+        auth.onAuthStateChanged(onAuthChanged);
+      } catch (error) {
+        setConnection(`Firebase başlatılamadı: ${firebaseError(error)}`, true);
+      }
+    }
+    function changeConcept(value) {
+      if (!concepts[value]) return;
+      currentConcept = value;
+      const item = concepts[value];
+      $('mainBannerTitle').textContent = item.title;
+      $('mainBannerDesc').textContent = item.description;
+      $('sectionTitle').textContent = item.section;
+      $('weekModeTitle').textContent = `Konsept: ${item.short}`;
+      $('modalTitleText').textContent = item.modal;
+      $('modalCategoryBadge').textContent = item.badge;
+      $('headerAddBtn').textContent = item.button;
+      $('formInfo').placeholder = item.placeholder;
+      renderCards();
+    }
+    function sortButtonState() {
+      for (const [id, type] of [['sortNew', 'new'], ['sortPop', 'popular']]) {
+        const button = $(id);
+        const selected = currentSort === type;
+        button.setAttribute('aria-pressed', String(selected));
+        button.className = `rounded-lg px-3 py-2 text-[11px] font-${selected ? 'extrabold' : 'bold'} ${selected ? 'bg-orange-600 text-white' : 'text-slate-400 transition hover:text-white'}`;
+      }
+    }
+    function renderCards() {
+      const container = $('grid-container');
+      container.replaceChildren();
+      const filtered = contents.filter((item) => item.concept === currentConcept).sort((a, b) => currentSort === 'popular' ? (b.votes || 0) - (a.votes || 0) : getMillis(b.createdAt) - getMillis(a.createdAt));
+      if (!filtered.length) {
+        const empty = document.createElement('div');
+        empty.className = 'col-span-full rounded-3xl border border-dashed border-slate-800 bg-slate-900/40 px-5 py-14 text-center';
+        const ball = document.createElement('div'); ball.className = 'mb-3 text-4xl'; ball.setAttribute('aria-hidden', 'true'); ball.textContent = '⚽';
+        const heading = document.createElement('h3'); heading.className = 'text-base font-extrabold text-slate-200'; heading.textContent = 'Bu kategoride henüz paylaşım yok';
+        const description = document.createElement('p'); description.className = 'mx-auto mt-2 max-w-sm text-xs leading-5 text-slate-500'; description.textContent = 'İlk kadroyu veya taktiği paylaş, topluluğun oylarıyla zirveye taşı.';
+        empty.append(ball, heading, description);
+        const button = document.createElement('button'); button.type = 'button'; button.textContent = concepts[currentConcept].button; button.className = 'mt-5 rounded-xl bg-orange-600 px-5 py-3 text-xs font-extrabold text-white hover:bg-orange-500'; button.addEventListener('click', openUploadModal); empty.append(button); container.append(empty); return;
+      }
+      for (const item of filtered) container.append(createCard(item));
+    }
+    function createCard(item) {
+      const card = document.createElement('article');
+      card.className = 'flex flex-col justify-between rounded-3xl border border-slate-800 bg-slate-900 p-4 shadow-xl shadow-black/10 transition hover:border-orange-500/35';
+      const top = document.createElement('div');
+      const head = document.createElement('div'); head.className = 'mb-4 flex items-start justify-between gap-3';
+      const person = document.createElement('div'); person.className = 'flex min-w-0 items-center gap-3';
+      const avatar = document.createElement('span'); avatar.className = 'flex h-10 w-10 shrink-0 items-center justify-center rounded-full border border-orange-500/25 bg-slate-800 text-xs font-extrabold text-orange-300'; avatar.textContent = String(item.nick || 'EF').slice(0, 2).toUpperCase();
+      const details = document.createElement('div'); details.className = 'min-w-0';
+      const name = document.createElement('h3'); name.className = 'truncate text-sm font-extrabold text-slate-100'; name.textContent = String(item.nick || 'Oyuncu');
+      if (item.isVip) { const badge = document.createElement('span'); badge.className = 'ml-1 rounded bg-amber-500/15 px-1.5 py-0.5 text-[9px] font-extrabold text-amber-300'; badge.textContent = '👑 VIP'; name.append(badge); }
+      const info = document.createElement('p'); info.className = 'mt-1 break-words text-[11px] leading-4 text-slate-400'; info.textContent = String(item.info || ''); details.append(name, info); person.append(avatar, details);
+      const votes = document.createElement('span'); votes.className = 'shrink-0 rounded-full bg-slate-800 px-2.5 py-1.5 text-[10px] font-extrabold text-orange-300'; votes.textContent = `${Number(item.votes) || 0} Oy`; head.append(person, votes);
+      const imageFrame = document.createElement('button'); imageFrame.type = 'button'; imageFrame.className = 'card-image group relative mb-4 block w-full overflow-hidden rounded-2xl border border-slate-800 bg-slate-950 text-left'; imageFrame.setAttribute('aria-label', `${String(item.nick || 'Oyuncu')} görselini tam ekranda incele`);
+      const image = document.createElement('img'); image.className = 'h-full w-full object-cover transition duration-300 group-hover:scale-[1.03]'; image.alt = `${String(item.nick || 'Oyuncu')} tarafından paylaşılan eFootball kadrosu`; image.loading = 'lazy';
+      const imageUrl = typeof item.image === 'string' && /^data:image\/jpeg;base64,/.test(item.image) ? item.image : '';
+      if (imageUrl) image.src = imageUrl; else { imageFrame.disabled = true; imageFrame.classList.add('cursor-not-allowed'); imageFrame.setAttribute('aria-label', 'Görsel yüklenemedi'); }
+      const zoom = document.createElement('span'); zoom.className = 'absolute bottom-2 right-2 rounded-lg bg-slate-950/85 px-2 py-1 text-[9px] font-bold text-white opacity-0 transition group-hover:opacity-100'; zoom.textContent = 'Görseli büyüt'; imageFrame.append(image, zoom);
+      imageFrame.addEventListener('click', () => openImageViewer(imageUrl, `${String(item.nick || '')} — ${String(item.info || '')}`));
+      top.append(head, imageFrame);
+      const footer = document.createElement('div'); footer.className = 'border-t border-slate-800 pt-3';
+      const owns = Boolean(firebaseUser && item.ownerUid === firebaseUser.uid);
+      if (owns) {
+        const row = document.createElement('div'); row.className = 'flex items-center gap-2';
+        const label = document.createElement('span'); label.className = 'flex-1 text-center text-[11px] font-bold text-slate-500'; label.textContent = '🛡️ Senin İçeriğin';
+        const del = document.createElement('button'); del.type = 'button'; del.className = 'rounded-xl border border-rose-500/20 bg-rose-500/10 px-3 py-2 text-[10px] font-extrabold text-rose-300 hover:bg-rose-500/20'; del.textContent = '🗑️ Kadromu Sil'; del.addEventListener('click', () => deleteContent(item.id)); row.append(label, del); footer.append(row);
+      } else {
+        const row = document.createElement('div'); row.className = 'flex gap-2';
+        for (const amount of [1, 10]) {
+          const button = document.createElement('button'); button.type = 'button'; button.className = amount === 1 ? 'flex-1 rounded-xl bg-orange-600 py-2.5 text-xs font-extrabold text-white shadow-md shadow-orange-950/20 hover:bg-orange-500' : 'flex-1 rounded-xl bg-amber-400 py-2.5 text-xs font-extrabold text-slate-950 hover:bg-amber-300'; button.textContent = `+${amount} Oy`; button.addEventListener('click', () => voteContent(item.id, amount)); row.append(button);
+        }
+        footer.append(row);
+      }
+      card.append(top, footer);
+      return card;
+    }
+    function openImageViewer(image, caption) {
+      if (!image) return;
+      $('viewerImg').src = image;
+      $('viewerCaption').textContent = caption;
+      showModal('imageViewerModal');
+    }
+    function openUploadModal() {
+      if (!isGuestAccount(firebaseUser) || !wallet) {
+        setConnection('Ücretsiz misafir hesabı hazırlanıyor. Birkaç saniye sonra tekrar dene.', true);
+        return;
+      }
+      if (!wallet.nick) {
+        openNickModal();
+        return;
+      }
+      $('uploaderNick').value = wallet.nick;
+      $('uploadStatus').textContent = '';
+      showModal('uploadModal');
+    }
+    async function compressImage(file) {
+      if (!file || !file.type.startsWith('image/')) throw new Error('JPEG, PNG veya WebP görseli seç.');
+      if (file.size > 12 * 1024 * 1024) throw new Error('Görsel en fazla 12 MB olabilir.');
+      const bitmap = await createImageBitmap(file);
+      const scale = Math.min(1, 800 / bitmap.width);
+      const canvas = document.createElement('canvas');
+      canvas.width = Math.max(1, Math.round(bitmap.width * scale));
+      canvas.height = Math.max(1, Math.round(bitmap.height * scale));
+      const context = canvas.getContext('2d', { alpha: false });
+      if (!context) throw new Error('Görsel dönüştürülemedi.');
+      context.drawImage(bitmap, 0, 0, canvas.width, canvas.height);
+      bitmap.close();
+      const blob = await new Promise((resolve, reject) => canvas.toBlob((result) => result ? resolve(result) : reject(new Error('JPEG oluşturulamadı.')), 'image/jpeg', 0.7));
+      if (blob.size > MAX_IMAGE_BYTES) throw new Error('Sıkıştırılmış görsel çok büyük. Daha küçük bir ekran görüntüsü seç.');
+      return await new Promise((resolve, reject) => {
+        const reader = new FileReader(); reader.onload = () => resolve(reader.result); reader.onerror = () => reject(new Error('Görsel okunamadı.')); reader.readAsDataURL(blob);
+      });
+    }
+    async function addContent(event) {
+      event.preventDefault();
+      if (!isGuestAccount(firebaseUser) || !wallet) return openUploadModal();
+      if (!wallet.nick) return openNickModal();
+      const info = $('formInfo').value.trim();
+      const file = $('imgFile').files[0];
+      if (!info || info.length > 100 || !file) return;
+      const button = $('uploadSubmit'); button.disabled = true; button.textContent = 'Yükleniyor…';
+      $('uploadStatus').textContent = 'Görsel hazırlanıyor…';
+      try {
+        const image = await compressImage(file);
+        const owner = auth.currentUser;
+        if (!owner || owner.uid !== firebaseUser.uid || !isGuestAccount(owner)) throw new Error('Misafir oturumu sona erdi. Sayfayı yenileyip tekrar dene.');
+        await db.collection('contents').add({ concept: currentConcept, ownerUid: owner.uid, nick: wallet.nick, info, image, votes: 0, isVip: wallet.isVip === true, createdAt: firebase.firestore.FieldValue.serverTimestamp() });
+        $('uploadForm').reset(); closeModal('uploadModal');
+      } catch (error) {
+        $('uploadStatus').textContent = firebaseError(error);
+      } finally { button.disabled = false; button.textContent = 'Paylaş'; }
+    }
+    async function deleteContent(id) {
+      if (!firebaseUser || !confirm('Bu kadroyu kalıcı olarak silmek istiyor musun?')) return;
+      try {
+        await db.collection('contents').doc(id).delete();
+      } catch (error) { alert(`Silinemedi: ${firebaseError(error)}`); }
+    }
+    async function voteContent(id, amount) {
+      if (!firebaseUser || !db || !wallet) return alert('Cüzdan yükleniyor. Birkaç saniye sonra tekrar dene.');
+      if (amount !== 1 && amount !== 10) return;
+      const uid = firebaseUser.uid;
+      const contentRef = db.collection('contents').doc(id);
+      const walletRef = getWalletRef(uid);
+      try {
+        await db.runTransaction(async (transaction) => {
+          const [contentSnap, walletSnap] = await Promise.all([transaction.get(contentRef), transaction.get(walletRef)]);
+          if (!contentSnap.exists || !walletSnap.exists) throw new Error('İçerik veya cüzdan bulunamadı.');
+          const content = contentSnap.data();
+          const balance = Number(walletSnap.data().points) || 0;
+          if (content.ownerUid === uid) throw new Error('Kendi içeriğine oy veremezsin.');
+          if (balance < amount) throw new Error('Yeterli puanın yok. VIP & Puan bölümünü incele.');
+          transaction.update(walletRef, { points: balance - amount, lastVoteContentId: id, lastVoteAmount: amount, lastVoteAt: firebase.firestore.FieldValue.serverTimestamp() });
+          transaction.update(contentRef, { votes: (Number(content.votes) || 0) + amount });
+        });
+      } catch (error) { alert(firebaseError(error)); }
+    }
+    async function copyText(text) {
+      try {
+        await navigator.clipboard.writeText(text);
+        $('copyStatus').textContent = 'Kopyalandı.';
+      } catch (_) {
+        const input = document.createElement('textarea'); input.value = text; input.setAttribute('readonly', ''); input.style.position = 'fixed'; input.style.opacity = '0'; document.body.append(input); input.select();
+        const copied = document.execCommand('copy'); input.remove(); $('copyStatus').textContent = copied ? 'Kopyalandı.' : 'Kopyalanamadı.';
+      }
+    }
+
+    $('conceptSelector').addEventListener('change', (event) => changeConcept(event.target.value));
+    $('sortNew').addEventListener('click', () => { currentSort = 'new'; sortButtonState(); renderCards(); });
+    $('sortPop').addEventListener('click', () => { currentSort = 'popular'; sortButtonState(); renderCards(); });
+    $('headerAddBtn').addEventListener('click', openUploadModal);
+    $('vipOpenBtn').addEventListener('click', () => showModal('vipModal'));
+    $('adminAccessBtn').addEventListener('click', () => alert('Yönetici paneli ücretsiz modda kapalı. SMS doğrulaması ve faturalandırma açılmıyor.'));
+    $('nickForm').addEventListener('submit', createGuestProfile);
+    $('uploadForm').addEventListener('submit', addContent);
+    document.querySelectorAll('[data-close]').forEach((button) => button.addEventListener('click', () => closeModal(button.dataset.close)));
+    document.querySelectorAll('[data-copy]').forEach((button) => button.addEventListener('click', () => copyText(button.dataset.copy)));
+    document.querySelectorAll('[role="dialog"]').forEach((modal) => modal.addEventListener('click', (event) => { if (event.target === modal) closeModal(modal.id); }));
+    document.addEventListener('keydown', (event) => { if (event.key === 'Escape') document.querySelectorAll('[role="dialog"]').forEach((modal) => { if (!modal.classList.contains('hidden')) closeModal(modal.id); }); });
+    renderAuth();
+    startFirebase();
+  </script>
+</body>
+</html>

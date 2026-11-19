@@ -1,0 +1,142 @@
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+    function isAnonymousUser() {
+      return request.auth != null
+        && request.auth.token.firebase.sign_in_provider == 'anonymous';
+    }
+
+    function validNick(nick) {
+      return nick is string && nick.matches('^[A-Za-z0-9_]{3,16}$');
+    }
+
+    function validContentShape(data) {
+      return data.keys().hasAll(['concept', 'ownerUid', 'nick', 'info', 'image', 'votes', 'isVip', 'createdAt'])
+        && data.keys().hasOnly(['concept', 'ownerUid', 'nick', 'info', 'image', 'votes', 'isVip', 'createdAt'])
+        && data.concept in ['kadro', 'dizilis', 'ilk11']
+        && data.ownerUid is string
+        && data.nick is string
+        && data.info is string
+        && data.info.size() > 0
+        && data.info.size() <= 100
+        && data.image is string
+        && data.image.matches('^data:image/jpeg;base64,[A-Za-z0-9+/=]+$')
+        && data.image.size() <= 850000
+        && data.votes is int
+        && data.isVip is bool
+        && data.createdAt == request.time;
+    }
+
+    function walletAfter(uid) {
+      return getAfter(/databases/$(database)/documents/guests/$(uid)).data;
+    }
+
+    function walletBefore(uid) {
+      return get(/databases/$(database)/documents/guests/$(uid)).data;
+    }
+
+    function matchingContentVote(contentId, amount) {
+      let path = /databases/$(database)/documents/contents/$(contentId);
+      let afterWallet = walletAfter(request.auth.uid);
+      return exists(path)
+        && existsAfter(path)
+        && get(path).data.ownerUid != request.auth.uid
+        && afterWallet.lastVoteContentId == contentId
+        && afterWallet.lastVoteAmount == amount
+        && afterWallet.lastVoteAt == request.time
+        && getAfter(path).data.votes == get(path).data.votes + amount;
+    }
+
+    function validVoteWalletUpdate(uid) {
+      let amount = resource.data.points - request.resource.data.points;
+      let contentId = request.resource.data.lastVoteContentId;
+      let changed = request.resource.data.diff(resource.data).affectedKeys();
+      return isAnonymousUser()
+        && request.auth.uid == uid
+        && changed.hasOnly(['points', 'lastVoteContentId', 'lastVoteAmount', 'lastVoteAt'])
+        && amount in [1, 10]
+        && request.resource.data.points >= 0
+        && request.resource.data.lastVoteAmount == amount
+        && contentId is string
+        && request.resource.data.lastVoteAt == request.time
+        && matchingContentVote(contentId, amount);
+    }
+
+    function validGuestNickUpdate(uid) {
+      let changed = request.resource.data.diff(resource.data).affectedKeys();
+      let nick = request.resource.data.nick;
+      let nickPath = /databases/$(database)/documents/nicks/$(nick.lower());
+      return isAnonymousUser()
+        && request.auth.uid == uid
+        && changed.hasOnly(['nick'])
+        && !resource.data.keys().hasAny(['nick'])
+        && request.resource.data.keys().hasOnly(['uid', 'points', 'createdAt', 'lastVoteContentId', 'lastVoteAmount', 'lastVoteAt', 'nick'])
+        && validNick(nick)
+        && existsAfter(nickPath)
+        && getAfter(nickPath).data.uid == uid
+        && getAfter(nickPath).data.nick == nick;
+    }
+
+    function validContentVote(contentId) {
+      let amount = request.resource.data.votes - resource.data.votes;
+      let beforeWallet = walletBefore(request.auth.uid);
+      let afterWallet = walletAfter(request.auth.uid);
+      return isAnonymousUser()
+        && resource.data.ownerUid != request.auth.uid
+        && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['votes'])
+        && amount in [1, 10]
+        && beforeWallet.points - afterWallet.points == amount
+        && afterWallet.lastVoteContentId == contentId
+        && afterWallet.lastVoteAmount == amount
+        && afterWallet.lastVoteAt == request.time;
+    }
+
+    match /contents/{contentId} {
+      allow read: if true;
+      allow create: if isAnonymousUser()
+        && request.resource.data.ownerUid == request.auth.uid
+        && validContentShape(request.resource.data)
+        && request.resource.data.votes == 0
+        && validNick(request.resource.data.nick)
+        && request.resource.data.isVip == false
+        && exists(/databases/$(database)/documents/guests/$(request.auth.uid))
+        && get(/databases/$(database)/documents/guests/$(request.auth.uid)).data.nick == request.resource.data.nick;
+      allow update: if validContentVote(contentId);
+      allow delete: if isAnonymousUser() && resource.data.ownerUid == request.auth.uid;
+    }
+
+    match /guests/{uid} {
+      allow get: if isAnonymousUser() && request.auth.uid == uid;
+      allow list: if false;
+      allow create: if isAnonymousUser()
+        && request.auth.uid == uid
+        && request.resource.data.keys().hasAll(['uid', 'points', 'createdAt', 'lastVoteContentId', 'lastVoteAmount', 'lastVoteAt'])
+        && request.resource.data.keys().hasOnly(['uid', 'points', 'createdAt', 'lastVoteContentId', 'lastVoteAmount', 'lastVoteAt'])
+        && request.resource.data.uid == uid
+        && request.resource.data.points == 10
+        && request.resource.data.createdAt == request.time
+        && request.resource.data.lastVoteContentId == ''
+        && request.resource.data.lastVoteAmount == 0
+        && request.resource.data.lastVoteAt == request.time;
+      allow update: if isAnonymousUser()
+        && request.auth.uid == uid
+        && (validVoteWalletUpdate(uid) || validGuestNickUpdate(uid));
+      allow delete: if false;
+    }
+
+    match /nicks/{nickKey} {
+      allow get: if true;
+      allow list: if false;
+      allow create: if isAnonymousUser()
+        && request.resource.data.keys().hasAll(['uid', 'nick', 'createdAt'])
+        && request.resource.data.keys().hasOnly(['uid', 'nick', 'createdAt'])
+        && request.resource.data.uid == request.auth.uid
+        && validNick(request.resource.data.nick)
+        && request.resource.data.nick.lower() == nickKey
+        && request.resource.data.createdAt == request.time
+        && existsAfter(/databases/$(database)/documents/guests/$(request.auth.uid))
+        && getAfter(/databases/$(database)/documents/guests/$(request.auth.uid)).data.nick == request.resource.data.nick;
+      allow update, delete: if false;
+    }
+  }
+}
